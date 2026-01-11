@@ -1,0 +1,17 @@
+:root {
+    --bg: #0c0d10;
+    --bg-elevated: #14161b;
+
+    --fg: #e7e7e4;
+    --fg-muted: #9a9a96;
+
+    --accent: #e24b5a;
+    --accent-dim: #3a1f24;
+
+    --grid: rgba(255, 255, 255, 0.035);
+
+    --font-display: "Fraunces", serif;
+    --font-mono: "IBM Plex Mono", monospace;
+
+    --radius: 6px;
+}
