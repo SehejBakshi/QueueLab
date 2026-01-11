@@ -1,6 +1,7 @@
 import type { ScheduledEvent, SimulationState, Message } from "./types";
 import { scheduleEvent } from "./scheduler";
 import { hasDeliverableMessage } from "./queue";
+import type { RuleExplanation } from "./rules";
 
 function maybeScheduleDeliver(state: SimulationState) {
     if (!hasDeliverableMessage(state))
@@ -8,7 +9,7 @@ function maybeScheduleDeliver(state: SimulationState) {
 
     // prevent double scheduling
     const alreadyScheduled = state.eventQueue.some(
-        e => e.type === "DELIVER" && e.at === state.now
+        e => e.type === "DELIVER" && e.at >= state.now
     );
 
     if (alreadyScheduled)
@@ -19,6 +20,10 @@ function maybeScheduleDeliver(state: SimulationState) {
         type: "DELIVER",
         payload: { consumerId: "c1" },
     });
+}
+
+function pushRule(state: SimulationState, rule: RuleExplanation) {
+    state.ruleLog.push(rule);
 }
 
 function handleEnqueue(
@@ -34,6 +39,12 @@ function handleEnqueue(
     };
 
     state.queue.messages.push(message);
+
+    pushRule(state, {
+        messageId: message.id,
+        text: "Message enqueued into the queue",
+    });
+
     maybeScheduleDeliver(state);
 }
 
@@ -55,46 +66,68 @@ function handleDeliver(
     if (consumer.inFlight >= consumer.concurrency)
         return;
 
+    consumer.inFlight += 1;
+
     message.state = "in_flight";
     message.deliveryCount += 1;
     message.lastDeliveredAt = state.now;
 
-    // schedule processing completion
+    pushRule(state, {
+        messageId: message.id,
+        text: "Message delivered to consumer (at-least-once delivery)",
+    });
+
+    // processing completion
+    scheduleEvent(state, {
+        at: state.now + consumer.processingTimeMs,
+        type: "PROCESS_RESULT",
+        payload: { messageId: message.id, consumerId: consumer.id }
+    });
+
+    // visibility timeout
     scheduleEvent(state, {
         at: state.now + state.queue.config.visibilityTimeoutMs,
-        type: "PROCESS_RESULT",
-        payload: { messageId: message.id,consumerId: consumer.id }
+        type: "VISIBILITY_TIMEOUT",
+        payload: { messageId: message.id }
     });
 
     maybeScheduleDeliver(state);
 }
 
 function handleProcessResult(
-     state: SimulationState,
-        event: ScheduledEvent<{ messageId: string; consumerId: string }>
+    state: SimulationState,
+    event: ScheduledEvent<{ messageId: string; consumerId: string }>
 ) {
     const consumer = state.consumers.find(
         c => c.id === event.payload.consumerId
     );
-    
     const message = state.queue.messages.find(
-        m => m.state === "queued" && m.visibleAt <= state.now
+        m => m.id === event.payload.messageId
     );
 
-    if (!message || !consumer)
-        return;
-    
-    if (message.state !== "in_flight")
+    if (!message || !consumer || message.state !== "in_flight")
         return;
 
-    consumer.inFlight = -1;
+    consumer.inFlight -= 1;
 
-    const succeded = Math.random() < consumer.successRate;
+    const succeeded = Math.random() < consumer.successRate;
 
-    if (succeded)
+    if (succeeded) {
         message.state = "acked";
 
-    maybeScheduleDeliver(state);
+        pushRule(state, {
+            messageId: message.id,
+            text: "Message acknowledged and removed from the queue",
+        });
+
+        maybeScheduleDeliver(state);
+        return;
+    }
+
+    pushRule(state, {
+        messageId: message.id,
+        text: "Message processing failed, waiting for visibility timeout",
+    });
 }
 
 function handleVisibilityTimeout(
@@ -105,17 +138,34 @@ function handleVisibilityTimeout(
         m => m.id === event.payload.messageId
     );
 
-    if (!message || message?.state !== "in_flight")
+    if (!message || message.state !== "in_flight")
         return;
 
     if (message.deliveryCount >= state.queue.config.maxRetries) {
         message.state = "dead_lettered";
         state.queue.dlq.push(message);
-    } else {
-        message.state = "queued";
-        message.visibleAt = state.now;
+        state.queue.messages.filter(
+            m => m.id !== message.id
+        )
+
+        pushRule(state, {
+            messageId: message.id,
+            text: `Message exceeded max retries (${state.queue.config.maxRetries}), sent to DLQ`,
+        });
+
         maybeScheduleDeliver(state);
-    }
+        return;
+    } 
+    
+    message.state = "queued";
+    message.visibleAt = state.now;
+
+    pushRule(state, {
+        messageId: message.id,
+        text: "Visibility timeout expired, message returned to queue",
+    });
+
+    maybeScheduleDeliver(state);
 }
 
 export function dispatchEvent(
@@ -150,6 +200,13 @@ export function dispatchEvent(
                 event as ScheduledEvent<{ messageId: string, consumerId: string }>
             );
             return;
+
+        // case "REMOVE_ACKED":
+        //     state.queue.messages = state.queue.messages.filter(
+        //         m => m.id !== (event as any).payload.messageId
+        //     );
+        //     maybeScheduleDeliver(state);
+        //     return;
 
         default:
             return;

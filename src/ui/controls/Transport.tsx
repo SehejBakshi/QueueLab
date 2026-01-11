@@ -1,35 +1,59 @@
+import { useState } from "react";
 import { useSimulation } from "../hooks/SimulationContext";
 
 export function Transport() {
-  const { enqueue, play, pause, setSpeed } = useSimulation();
+  const { enqueue, play, pause, setSpeed, injectCount, reset } = useSimulation();
+  const [running, setRunning] = useState(true);
+
+  function toggle() {
+    setRunning(r => {
+      if (r) pause();
+      else play();
+      return !r;
+    });
+  }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 14,
-        alignItems: "center",
-        marginTop: 20,
-      }}
-    >
-      <button className="mono" onClick={play}>▶</button>
-      <button className="mono" onClick={pause}>❚❚</button>
+    <div className="transport">
+      <button className="transport-btn" onClick={toggle}>
+        <span className="material-icons">
+          {running ? "pause" : "play_arrow"}
+        </span>
+        <span className="transport-label">
+          {running ? "PAUSE" : "RUN"}
+        </span>
+      </button>
 
-      <input
+      <div className="speed">
+        <span>SPEED</span>
+        <input
         type="range"
-        min={80}
-        max={1200}
-        step={40}
-        defaultValue={400}
-        onChange={e => setSpeed(Number(e.target.value))}
-      />
+          min={80}
+          max={1200}
+          step={40}
+          defaultValue={400}
+          onChange={e => {
+            const v = Number(e.target.value);
+            setSpeed(1280 - v);
+          }}
+        />
+      </div>
 
       <button
-        className="mono"
-        onClick={() => enqueue("burst", 8)}
+        className="inject-btn" 
+        onClick={() => enqueue("burst", injectCount)}
       >
-        inject ×8
+        START RUN
       </button>
+
+      <button className="transport-btn" onClick={() => {
+        reset();
+        toggle();
+      }}>
+        <span className="material-icons">replay</span>
+        <span className="transport-label">RESET</span>
+      </button>
+
     </div>
   );
 }

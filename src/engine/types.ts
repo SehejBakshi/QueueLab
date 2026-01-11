@@ -1,3 +1,5 @@
+import type { RuleExplanation } from "./rules";
+
 // ---------------------
 // Core simulation clock
 // ---------------------
@@ -56,7 +58,8 @@ export type EventType =
     | "ENQUEUE"
     | "DELIVER"
     | "VISIBILITY_TIMEOUT"
-    | "PROCESS_RESULT";
+    | "PROCESS_RESULT"
+    | "REMOVE_ACKED";
 
 export type ScheduledEvent<T = any> = {
     at: SimulationTime;
@@ -72,4 +75,5 @@ export type SimulationState = {
     queue: QueueState;
     consumers: ConsumerState[];
     eventQueue: ScheduledEvent[];
+    ruleLog: RuleExplanation[];
 }

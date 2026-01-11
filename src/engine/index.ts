@@ -19,10 +19,11 @@ export function createInitialState(): SimulationState {
         concurrency: 1,
         inFlight: 0,
         processingTimeMs: 1500,
-        successRate: 0.7
+        successRate: 0.3
       }
     ],
     eventQueue: [],
+    ruleLog: [],
   };
 }
 
