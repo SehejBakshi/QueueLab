@@ -51,6 +51,7 @@ export function useSimulation() {
             next.queue.config.visibilityTimeoutMs = ms;
             next.ruleLog.push({
                 messageId: "system",
+                type: "CONFIG",
                 text: `[CONFIG] visibility timeout set to ${ms}ms`,
             });
             return next;
@@ -63,6 +64,7 @@ export function useSimulation() {
             next.queue.config.maxRetries = n;
             next.ruleLog.push({
                 messageId: "system",
+                type: "CONFIG",
                 text: `[CONFIG] max retries set to ${n}`,
             });
             return next;
@@ -75,6 +77,7 @@ export function useSimulation() {
             next.consumers[0].processingTimeMs = ms;
             next.ruleLog.push({
                 messageId: "system",
+                type: "CONFIG",
                 text: `[CONFIG] processing time set to ${ms}ms`,
             });
             return next;
@@ -82,11 +85,13 @@ export function useSimulation() {
     }
 
     function setSuccessRate(rate: number) {
+        console.log('rate:', rate)
         setState(prev => {
             const next = structuredClone(prev);
             next.consumers[0].successRate = rate;
             next.ruleLog.push({
                 messageId: "system",
+                type: "CONFIG",
                 text: `[CONFIG] success rate set to ${rate}%`,
             });
             return next;

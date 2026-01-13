@@ -21,6 +21,7 @@ export type Message = {
     deliveryCount: number;
     visibleAt: SimulationTime;
     lastDeliveredAt?: SimulationTime;
+    consumerId?: string;
 };
 
 // ---------------------

@@ -53,13 +53,13 @@ export default function SystemParameters() {
 
             <div className="param">
                 <label>SUCCESS RATE</label>
-                <span>{Math.round(consumer.successRate)}%</span>
+                <span>{consumer.successRate*100}%</span>
                 <input
                     type="range"
-                    min={10}
+                    min={0}
                     max={100}
                     step={5}
-                    value={Math.round(consumer.successRate)}
+                    value={Math.round(consumer.successRate*100)}
                     onChange={e => setSuccessRate(Number(e.target.value))}  
                 />
             </div>

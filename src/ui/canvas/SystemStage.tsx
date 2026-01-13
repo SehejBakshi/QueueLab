@@ -16,6 +16,7 @@ export default function SystemStage() {
 
   const [ackPos, setAckPos] = useState({ x: 0, y: 0 });
   const [dlqPos, setDlqPos] = useState({ x: 0, y: 0 });
+  const [consumerPos, setConsumerPos] = useState({ x: 0, y: 0 });
 
   useLayoutEffect(() => {
     if (!stageRef.current || !ackRef.current || !dlqRef.current) return;
@@ -32,6 +33,12 @@ export default function SystemStage() {
     setDlqPos({
       x: dlq.left - stage.left + dlq.width / 2,
       y: dlq.top - stage.top + dlq.height / 2,
+    });
+
+    // Consumer center (hard-coded container)
+    setConsumerPos({
+      x: 360 + 260 / 2,
+      y: 190 + 180 / 2,
     });
   }, []);
 
@@ -106,13 +113,11 @@ export default function SystemStage() {
             radial-gradient(circle at 50% 40%, rgba(255,255,255,0.12), transparent 55%),
             radial-gradient(circle at 50% 80%, rgba(0,0,0,0.5), transparent 70%)
           `,
-
           boxShadow: `
             inset 0 0 0 1px rgba(255,255,255,0.14),
             inset 0 0 40px rgba(255,255,255,0.08),
             0 16px 36px rgba(0,0,0,0.7)
           `,
-
           opacity: Math.min(0.9, 0.35 + inflight * 0.18),
         }}
       />
@@ -149,6 +154,34 @@ export default function SystemStage() {
         }}
       />
 
+      {/* Tethers */}
+      <svg
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+        }}
+      >
+        {allMessages.map((m, i) => {
+          if (m.state !== "in_flight") return null;
+
+          const y = 240 + (i % 6) * 14;
+
+          return (
+            <line
+              key={m.id}
+              x1={consumerPos.x}
+              y1={consumerPos.y}
+              x2={X.in_flight}
+              y2={y}
+              stroke="rgba(255,255,255,0.35)"
+              strokeWidth={1}
+            />
+          );
+        })}
+      </svg>
+
+      {/* Messages */}
       {allMessages.map((m, i) => {
         const qi = queued.findIndex(q => q.id === m.id);
         const safeQi = qi === -1 ? 0 : qi;
@@ -201,9 +234,17 @@ export default function SystemStage() {
             }}
             style={{
               position: "absolute",
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
+              minWidth: 28,
+              height: 18,
+              padding: "0 6px",
+              borderRadius: 6,
+              fontSize: 10,
+              fontFamily: "IBM Plex Mono",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#000",
+
               background:
                 m.state === "dead_lettered"
                   ? "#c84b4b"
@@ -212,6 +253,7 @@ export default function SystemStage() {
                   : m.state === "in_flight"
                   ? "#f2f2f2"
                   : "#9a9a9a",
+
               boxShadow:
                 m.state === "in_flight"
                   ? "0 0 10px rgba(255,255,255,0.45)"
@@ -219,7 +261,10 @@ export default function SystemStage() {
                   ? "0 0 8px rgba(76,175,80,0.35)"
                   : "none",
             }}
-          />
+          >
+            #{m.id.slice(0, 2)}
+            {m.deliveryCount > 1 ? ` R${m.deliveryCount}` : ""}
+          </motion.div>
         );
       })}
     </div>

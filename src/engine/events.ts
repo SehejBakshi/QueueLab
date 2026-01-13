@@ -42,6 +42,7 @@ function handleEnqueue(
 
     pushRule(state, {
         messageId: message.id,
+        type: "ENQUEUE",
         text: "Message enqueued into the queue",
     });
 
@@ -69,11 +70,13 @@ function handleDeliver(
     consumer.inFlight += 1;
 
     message.state = "in_flight";
+    // message.consumerId = consumer.id;
     message.deliveryCount += 1;
     message.lastDeliveredAt = state.now;
 
     pushRule(state, {
         messageId: message.id,
+        type: "DELIVER",
         text: "Message delivered to consumer (at-least-once delivery)",
     });
 
@@ -114,9 +117,11 @@ function handleProcessResult(
 
     if (succeeded) {
         message.state = "acked";
+        // message.consumerId = undefined;
 
         pushRule(state, {
             messageId: message.id,
+            type: "PROCESS_SUCCESS",
             text: "Message acknowledged and removed from the queue",
         });
 
@@ -126,6 +131,7 @@ function handleProcessResult(
 
     pushRule(state, {
         messageId: message.id,
+        type: "PROCESS_FAIL",
         text: "Message processing failed, waiting for visibility timeout",
     });
 }
@@ -144,24 +150,29 @@ function handleVisibilityTimeout(
     if (message.deliveryCount >= state.queue.config.maxRetries) {
         message.state = "dead_lettered";
         state.queue.dlq.push(message);
-        state.queue.messages.filter(
+        // message.consumerId = undefined;
+        
+        state.queue.messages = state.queue.messages.filter(
             m => m.id !== message.id
         )
-
+ 
         pushRule(state, {
             messageId: message.id,
+            type: "DLQ",
             text: `Message exceeded max retries (${state.queue.config.maxRetries}), sent to DLQ`,
         });
-
+        
         maybeScheduleDeliver(state);
         return;
     } 
     
+    // message.consumerId = undefined;
     message.state = "queued";
     message.visibleAt = state.now;
 
     pushRule(state, {
         messageId: message.id,
+        type: "VISIBILITY_TIMEOUT",
         text: "Visibility timeout expired, message returned to queue",
     });
 
@@ -200,13 +211,6 @@ export function dispatchEvent(
                 event as ScheduledEvent<{ messageId: string, consumerId: string }>
             );
             return;
-
-        // case "REMOVE_ACKED":
-        //     state.queue.messages = state.queue.messages.filter(
-        //         m => m.id !== (event as any).payload.messageId
-        //     );
-        //     maybeScheduleDeliver(state);
-        //     return;
 
         default:
             return;

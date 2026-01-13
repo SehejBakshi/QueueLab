@@ -12,9 +12,18 @@ export default function RuleLens() {
     );
   }
 
+  const prefix = 
+    last.type === "DELIVER" ? "📥" :
+    last.type === "PROCESS_SUCCESS" ? "✅" :
+    last.type === "PROCESS_FAIL" ? "⚠️" :
+    last.type === "VISIBILITY_TIMEOUT" ? "⏱️" :
+    last.type === "DLQ" ? "💀" :
+    last.type === "ENQUEUE" ? "➕" :
+    "";
+
   return (
-    <p style={{ opacity: 0.75 }}>
-      {last.text}
+    <p style={{ opacity: 0.85 }}>
+      {prefix} {last.text}
     </p>
   );
 }
