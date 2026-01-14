@@ -1,5 +1,5 @@
-import { motion } from "framer-motion";
-import { useRef, useLayoutEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useRef, useLayoutEffect, useState, useEffect } from "react";
 import { useSimulation } from "../hooks/SimulationContext";
 
 const X = {
@@ -7,8 +7,52 @@ const X = {
   in_flight: 320 + 260 / 2,
 } as const;
 
+const bucketBase = {
+  position: "absolute" as const,
+  borderRadius: 28,
+  backdropFilter: "blur(6px)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  boxShadow: `
+    inset 0 0 0 1px rgba(255,255,255,0.04),
+    0 20px 60px rgba(0,0,0,0.6)
+  `,
+};
+
+function messageStyle(m: any) {
+  switch (m.state) {
+    case "in_flight":
+      return {
+        bg: "linear-gradient(180deg, #ffffff, #f5f5f5)",
+        color: "#111",
+        shadow: "0 0 26px rgba(255,255,255,0.7)",
+        border: "1px solid rgba(255,255,255,0.75)",
+      };
+    case "acked":
+      return {
+        bg: "linear-gradient(180deg, #6fcf97, #4caf50)",
+        color: "#0c2b16",
+        shadow: "0 0 14px rgba(76,175,80,0.4)",
+        border: "1px solid rgba(120,220,160,0.6)",
+      };
+    case "dead_lettered":
+      return {
+        bg: "linear-gradient(180deg, #d26b6b, #b84242)",
+        color: "#2b0c0c",
+        shadow: "0 0 16px rgba(200,75,75,0.45)",
+        border: "1px solid rgba(220,100,100,0.6)",
+      };
+    default:
+      return {
+        bg: "rgba(200,200,200,0.95)",
+        color: "#111",
+        shadow: "0 0 10px rgba(0,0,0,0.4)",
+        border: "1px solid rgba(255,255,255,0.5)",
+      };
+  }
+}
+
 export default function SystemStage() {
-  const { state, activeRule } = useSimulation();
+  const { state } = useSimulation();
 
   const stageRef = useRef<HTMLDivElement>(null);
   const ackRef = useRef<HTMLDivElement>(null);
@@ -16,7 +60,12 @@ export default function SystemStage() {
 
   const [ackPos, setAckPos] = useState({ x: 0, y: 0 });
   const [dlqPos, setDlqPos] = useState({ x: 0, y: 0 });
-  const [consumerPos, setConsumerPos] = useState({ x: 0, y: 0 });
+
+  const [ackGlow, setAckGlow] = useState(false);
+  const [dlqGlow, setDlqGlow] = useState(false);
+
+  const prevAckCount = useRef(0);
+  const prevDlqCount = useRef(0);
 
   useLayoutEffect(() => {
     if (!stageRef.current || !ackRef.current || !dlqRef.current) return;
@@ -34,236 +83,281 @@ export default function SystemStage() {
       x: dlq.left - stage.left + dlq.width / 2,
       y: dlq.top - stage.top + dlq.height / 2,
     });
-
-    // Consumer center (hard-coded container)
-    setConsumerPos({
-      x: 360 + 260 / 2,
-      y: 190 + 180 / 2,
-    });
   }, []);
 
   const queued = state.queue.messages.filter(m => m.state === "queued");
-  const inflight = state.queue.messages.filter(m => m.state === "in_flight").length;
-  const depth = queued.length;
+  const inflight = state.queue.messages.filter(m => m.state === "in_flight");
+  const acked = state.queue.messages.filter(m => m.state === "acked");
+  const dlq = state.queue.dlq;
 
-  const allMessages = [...state.queue.messages, ...state.queue.dlq];
+  useEffect(() => {
+    if (acked.length > prevAckCount.current) {
+      setAckGlow(true);
+      setTimeout(() => setAckGlow(false), 600);
+    }
+    prevAckCount.current = acked.length;
+  }, [acked.length]);
 
-  const ruleText = activeRule?.text ?? "";
-  const isVisibilityRule = ruleText.includes("Visibility timeout");
+  useEffect(() => {
+    if (dlq.length > prevDlqCount.current) {
+      setDlqGlow(true);
+      setTimeout(() => setDlqGlow(false), 600);
+    }
+    prevDlqCount.current = dlq.length;
+  }, [dlq.length]);
 
   return (
     <div
       ref={stageRef}
+      className="simulator"
       style={{
-        height: 560,
+        height: 533,
         position: "relative",
-        borderRadius: 22,
+        borderRadius: "403vh",
         background:
-          "radial-gradient(1200px 600px at 20% 20%, #131212ff, #090909)",
+          "radial-gradient(1200px 600px at 20% 20%, rgba(80,137,147,0.32), rgba(0,0,0,0.83))",
         overflow: "hidden",
       }}
-      className="simulator"
     >
-      {/* Labels */}
-      <div style={{ position: "absolute", left: 160, top: 120, opacity: 0.4 }}>
-        Queue
-      </div>
-      <div style={{ position: "absolute", left: 380, top: 140, opacity: 0.4 }}>
-        Consumers
-      </div>
-      <div style={{ position: "absolute", left: ackPos.x - 60, top: ackPos.y - 100, opacity: 0.4 }}>
-        Acknowledged
-      </div>
-      <div style={{ position: "absolute", left: dlqPos.x - 50, top: dlqPos.y - 110, opacity: 0.4 }}>
-        Dead letter
-      </div>
-
-      {/* Queue pressure */}
+      {/* QUEUE */}
       <div
         style={{
-          position: "absolute",
+          ...bucketBase,
           left: 140,
-          top: 150,
-          width: 180,
-          height: 260,
-          borderRadius: 28,
-          background: `
-            radial-gradient(circle at 30% 20%, rgba(255,255,255,0.08), transparent 60%),
-            radial-gradient(circle at 50% 100%, rgba(0,0,0,0.6), transparent 70%)
-          `,
+          top: 140,
+          width: 160,
+          height: 300,
+          borderRadius: "18px 18px 32px 32px",
+          background: 
+            "linear-gradient(to bottom, rgba(255, 255, 255, 0.12), rhba(40, 46, 60, 0.55))",
+            // "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12), transparent 65%), rgba(40,46,60,0.55)",
           boxShadow: `
-            inset 0 0 0 1px rgba(255,255,255,0.12),
-            inset 0 0 30px rgba(255,255,255,0.06),
-            0 20px 40px rgba(0,0,0,0.6)
+            inset 0 6px 0 rgba(255, 255, 255, 0.08),
+            inset 0 -12px 20px rgba(0, 0, 0, 0.5),
+            0 20px 60px rgba(0, 0, 0, 0.6)
           `,
-          opacity: Math.min(0.95, 0.35 + depth * 0.06),
         }}
-      />
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: -8,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 48,
+            height: 8,
+            borderRadius: 4,
+            background: "rgba(255, 255, 255, 0.25)",
+          }}
+        />
+        <div style={{ position: "absolute", top: 14, left: 18, fontSize: 11, letterSpacing: "0.12em", opacity: 0.7, fontFamily: "IBM Plex Mono" }}>
+          QUEUE
+        </div>
+      </div>
 
-      {/* Consumer pull */}
+      {/* CONSUMER */}
       <div
         style={{
-          position: "absolute",
+          ...bucketBase,
           left: 360,
           top: 190,
           width: 260,
           height: 180,
           borderRadius: 32,
-          background: `
-            radial-gradient(circle at 50% 40%, rgba(255,255,255,0.12), transparent 55%),
-            radial-gradient(circle at 50% 80%, rgba(0,0,0,0.5), transparent 70%)
-          `,
-          boxShadow: `
-            inset 0 0 0 1px rgba(255,255,255,0.14),
-            inset 0 0 40px rgba(255,255,255,0.08),
-            0 16px 36px rgba(0,0,0,0.7)
-          `,
-          opacity: Math.min(0.9, 0.35 + inflight * 0.18),
+          background:
+            "radial-gradient(circle at 50% 40%, rgba(255,255,255,0.18), transparent 60%), rgba(60,66,80,0.6)",
         }}
-      />
+      >
+        <div style={{ position: "absolute", top: 14, left: 18, fontSize: 11, letterSpacing: "0.12em", opacity: 0.75, fontFamily: "IBM Plex Mono" }}>
+          CONSUMER
+        </div>
+      </div>
 
-      {/* ACK bucket */}
+      {/* ACK */}
       <div
         ref={ackRef}
         style={{
-          position: "absolute",
+          ...bucketBase,
           right: 500,
           top: 100,
           width: 180,
-          height: 140,
-          borderRadius: 28,
+          minHeight: 140,
+          overflow: "hidden",
           background:
-            "radial-gradient(circle at 50% 50%, #1f3a1f, transparent)",
-          opacity: 0.55,
+            "radial-gradient(circle at 50% 50%, rgba(80,180,120,0.35), transparent 65%), rgba(30,60,40,0.6)",
+          boxShadow: ackGlow
+            ? "0 0 50px rgba(120,220,160,0.7)"
+            : bucketBase.boxShadow,
+          border: ackGlow
+            ? "1px solid rgba(120,220,160,0.9)"
+            : bucketBase.border,
         }}
-      />
+      >
+        <div style={{ position: "absolute", top: 14, left: 18, fontSize: 11, letterSpacing: "0.12em", opacity: 0.75, fontFamily: "IBM Plex Mono" }}>
+          ACKNOWLEDGED
+        </div>
 
-      {/* DLQ bucket */}
+        <div
+          style={{
+            position: "relative",
+            marginTop: 42,
+            padding: "0 14px 14px",
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0,1fr))",
+            gap: 8,
+            justifyItems: "center",
+          }}
+        >
+          <AnimatePresence>
+            {acked.map(m => (
+              <motion.div
+                key={m.id}
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: "spring", stiffness: 260, damping: 18 }}
+                style={{
+                  minWidth: 42,
+                  height: 24,
+                  padding: "0 10px",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontFamily: "IBM Plex Mono",
+                  fontWeight: 600,
+                  background: messageStyle(m).bg,
+                  color: messageStyle(m).color,
+                  boxShadow: messageStyle(m).shadow,
+                  border: messageStyle(m).border,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                #{m.id.slice(0, 2)}
+                {m.deliveryCount > 1 && (
+                  <span style={{ marginLeft: 6, opacity: 0.75 }}>
+                    R{m.deliveryCount}
+                  </span>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* DLQ */}
       <div
         ref={dlqRef}
         style={{
-          position: "absolute",
+          ...bucketBase,
           right: 500,
           top: 320,
           width: 170,
-          height: 170,
+          minHeight: 170,
           borderRadius: "50%",
+          overflow: "hidden",
           background:
-            "radial-gradient(circle at 50% 50%, #2a0f0f, #090909)",
-          opacity: 0.75,
-        }}
-      />
-
-      {/* Tethers */}
-      <svg
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
+            "radial-gradient(circle at 50% 50%, rgba(160,60,60,0.4), transparent 65%), rgba(60,20,20,0.75)",
+          boxShadow: dlqGlow
+            ? "0 0 55px rgba(220,90,90,0.75)"
+            : bucketBase.boxShadow,
+          border: dlqGlow
+            ? "1px solid rgba(220,100,100,0.95)"
+            : bucketBase.border,
         }}
       >
-        {allMessages.map((m, i) => {
-          if (m.state !== "in_flight") return null;
+        <div style={{ position: "absolute", top: 20, left: 38, fontSize: 11, letterSpacing: "0.12em", opacity: 0.7, fontFamily: "IBM Plex Mono" }}>
+          DEAD LETTER
+        </div>
 
-          const y = 240 + (i % 6) * 14;
+        <div
+          style={{
+            position: "absolute",
+            inset: "42px 14px 14px",
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gap: 8,
+            justifyItems: "center",
+            alignContent: "start",
+          }}
+        >
+          <AnimatePresence>
+            {dlq.map(m => (
+              <motion.div
+                key={m.id}
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                style={{
+                  minWidth: 42,
+                  height: 24,
+                  padding: "0 10px",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontFamily: "IBM Plex Mono",
+                  fontWeight: 600,
+                  background: messageStyle(m).bg,
+                  color: messageStyle(m).color,
+                  boxShadow: messageStyle(m).shadow,
+                  border: messageStyle(m).border,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                #{m.id.slice(0, 2)}
+                {m.deliveryCount > 1 && (
+                  <span style={{ marginLeft: 6, opacity: 0.75 }}>
+                    R{m.deliveryCount}
+                  </span>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      </div>
 
-          return (
-            <line
-              key={m.id}
-              x1={consumerPos.x}
-              y1={consumerPos.y}
-              x2={X.in_flight}
-              y2={y}
-              stroke="rgba(255,255,255,0.35)"
-              strokeWidth={1}
-            />
-          );
-        })}
-      </svg>
-
-      {/* Messages */}
-      {allMessages.map((m, i) => {
+      {/* STAGE MESSAGES (QUEUED + IN-FLIGHT ONLY) */}
+      {[...queued, ...inflight].map((m, i) => {
         const qi = queued.findIndex(q => q.id === m.id);
-        const safeQi = qi === -1 ? 0 : qi;
-        const spacing = Math.min(14, 140 / Math.max(depth, 1));
-
-        const isQueued = m.state === "queued";
-        const isRetry = isQueued && m.deliveryCount > 1;
-        const isTerminal = m.state === "acked" || m.state === "dead_lettered";
+        const spacing = Math.min(14, 140 / Math.max(queued.length, 1));
 
         return (
           <motion.div
             key={m.id}
-            layout={!isTerminal}
+            layout
             animate={{
-              x:
-                m.state === "acked"
-                  ? ackPos.x
-                  : m.state === "dead_lettered"
-                  ? dlqPos.x
-                  : isRetry
-                  ? [420, 60, X.queued]
-                  : X[m.state],
-
-              y:
-                m.state === "acked"
-                  ? ackPos.y + ((i % 6) - 2.5) * 12
-                  : m.state === "dead_lettered"
-                  ? dlqPos.y + ((i % 6) - 2.5) * 12
-                  : m.state === "queued"
-                  ? 210 + safeQi * spacing
-                  : 240 + (i % 6) * 14,
-
-              scale:
-                m.state === "in_flight"
-                  ? 1.35
-                  : isTerminal
-                  ? 0.85
-                  : 1,
-
-              opacity:
-                isVisibilityRule && m.state !== "queued"
-                  ? 0.25
-                  : 1,
+              x: m.state === "queued" ? X.queued : X.in_flight,
+              y: m.state === "queued" ? 210 + qi * spacing : 240 + (i % 6) * 14,
+              scale: m.state === "in_flight" ? 1.35 : 1,
             }}
-            transition={{
-              type: isTerminal ? "tween" : "spring",
-              stiffness: 180,
-              damping: 20,
-              duration: isTerminal ? 0.45 : undefined,
-            }}
+            transition={{ type: "spring", stiffness: 180, damping: 20 }}
             style={{
               position: "absolute",
-              minWidth: 28,
-              height: 18,
-              padding: "0 6px",
-              borderRadius: 6,
-              fontSize: 10,
+              minWidth: 42,
+              height: 24,
+              padding: "0 10px",
+              borderRadius: 999,
+              fontSize: 11,
               fontFamily: "IBM Plex Mono",
+              fontWeight: 600,
+              background: messageStyle(m).bg,
+              color: messageStyle(m).color,
+              boxShadow: messageStyle(m).shadow,
+              border: messageStyle(m).border,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#000",
-
-              background:
-                m.state === "dead_lettered"
-                  ? "#c84b4b"
-                  : m.state === "acked"
-                  ? "#4caf50"
-                  : m.state === "in_flight"
-                  ? "#f2f2f2"
-                  : "#9a9a9a",
-
-              boxShadow:
-                m.state === "in_flight"
-                  ? "0 0 10px rgba(255,255,255,0.45)"
-                  : m.state === "acked"
-                  ? "0 0 8px rgba(76,175,80,0.35)"
-                  : "none",
+              zIndex: m.state === "in_flight" ? 4 : 2,
             }}
           >
             #{m.id.slice(0, 2)}
-            {m.deliveryCount > 1 ? ` R${m.deliveryCount}` : ""}
+            {m.deliveryCount > 1 && (
+              <span style={{ marginLeft: 6, opacity: 0.75 }}>
+                R{m.deliveryCount}
+              </span>
+            )}
           </motion.div>
         );
       })}

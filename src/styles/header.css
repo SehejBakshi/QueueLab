@@ -175,7 +175,7 @@
   grid-template-columns: 420px 280px;
   gap: 64px;
   /* align-items: start; */
-  margin: 48px auto 40px;
+  margin: 48px auto 18px;
   max-width: 760px;
 }
 

@@ -3,7 +3,7 @@ import { useSimulation } from "../hooks/SimulationContext";
 
 export function Transport() {
   const { enqueue, play, pause, setSpeed, injectCount, reset } = useSimulation();
-  const [running, setRunning] = useState(true);
+  const [running, setRunning] = useState(false);
 
   function toggle() {
     setRunning(r => {
@@ -41,14 +41,19 @@ export function Transport() {
 
       <button
         className="inject-btn" 
-        onClick={() => enqueue("burst", injectCount)}
+        onClick={() => {
+          enqueue("burst", injectCount);
+          if(!running)
+            toggle();
+        }}
       >
         START RUN
       </button>
 
       <button className="transport-btn" onClick={() => {
         reset();
-        toggle();
+        if(running)
+          toggle();
       }}>
         <span className="material-icons">replay</span>
         <span className="transport-label">RESET</span>
