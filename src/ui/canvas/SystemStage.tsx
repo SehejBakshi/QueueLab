@@ -18,6 +18,10 @@ const bucketBase = {
   `,
 };
 
+const DLQ_BASE_SIZE = 170;
+const DLQ_GROW_PER_MSG = 6;
+const DLQ_MAX_SIZE = 260;
+
 function messageStyle(m: any) {
   switch (m.state) {
     case "in_flight":
@@ -57,7 +61,11 @@ export default function SystemStage() {
   const stageRef = useRef<HTMLDivElement>(null);
   const ackRef = useRef<HTMLDivElement>(null);
   const dlqRef = useRef<HTMLDivElement>(null);
+  const queueRef = useRef<HTMLDivElement>(null);
+  const consumerRef = useRef<HTMLDivElement>(null);
 
+  const [queuePos, setQueuePos] = useState({ x: 0, y: 0 });
+  const [consumerPos, setConsumerPos] = useState({ x: 0, y: 0 });
   const [ackPos, setAckPos] = useState({ x: 0, y: 0 });
   const [dlqPos, setDlqPos] = useState({ x: 0, y: 0 });
 
@@ -68,11 +76,23 @@ export default function SystemStage() {
   const prevDlqCount = useRef(0);
 
   useLayoutEffect(() => {
-    if (!stageRef.current || !ackRef.current || !dlqRef.current) return;
+    if (!stageRef.current || !ackRef.current || !dlqRef.current || !queueRef.current || !consumerRef.current) return;
 
     const stage = stageRef.current.getBoundingClientRect();
     const ack = ackRef.current.getBoundingClientRect();
     const dlq = dlqRef.current.getBoundingClientRect();
+    const queue = queueRef.current.getBoundingClientRect();
+    const consumer = consumerRef.current.getBoundingClientRect();
+    
+    setQueuePos({
+      x: queue.left - stage.left + queue.width / 2,
+      y: queue.top - stage.top + queue.height / 2,
+    });
+
+    setConsumerPos({
+      x: consumer.left - stage.left + consumer.width / 2,
+      y: consumer.top - stage.top + consumer.height / 2,
+    });
 
     setAckPos({
       x: ack.left - stage.left + ack.width / 2,
@@ -106,6 +126,11 @@ export default function SystemStage() {
     prevDlqCount.current = dlq.length;
   }, [dlq.length]);
 
+  const dlqSize = Math.min(
+    DLQ_MAX_SIZE,
+    DLQ_BASE_SIZE + dlq.length * DLQ_GROW_PER_MSG
+  );
+
   return (
     <div
       ref={stageRef}
@@ -121,6 +146,7 @@ export default function SystemStage() {
     >
       {/* QUEUE */}
       <div
+        ref={queueRef}
         style={{
           ...bucketBase,
           left: 140,
@@ -157,9 +183,10 @@ export default function SystemStage() {
 
       {/* CONSUMER */}
       <div
+        ref={consumerRef}
         style={{
           ...bucketBase,
-          left: 360,
+          left: 650,
           top: 190,
           width: 260,
           height: 180,
@@ -252,8 +279,8 @@ export default function SystemStage() {
           ...bucketBase,
           right: 500,
           top: 320,
-          width: 170,
-          minHeight: 170,
+          width: dlqSize,
+          minHeight: dlqSize,
           borderRadius: "50%",
           overflow: "hidden",
           background:
@@ -266,7 +293,7 @@ export default function SystemStage() {
             : bucketBase.border,
         }}
       >
-        <div style={{ position: "absolute", top: 20, left: 38, fontSize: 11, letterSpacing: "0.12em", opacity: 0.7, fontFamily: "IBM Plex Mono" }}>
+        <div style={{ position: "absolute", top: 20, left: 48, fontSize: 11, letterSpacing: "0.12em", opacity: 0.7, fontFamily: "IBM Plex Mono" }}>
           DEAD LETTER
         </div>
 
@@ -321,15 +348,32 @@ export default function SystemStage() {
       {/* STAGE MESSAGES (QUEUED + IN-FLIGHT ONLY) */}
       {[...queued, ...inflight].map((m, i) => {
         const qi = queued.findIndex(q => q.id === m.id);
-        const spacing = Math.min(14, 140 / Math.max(queued.length, 1));
+
+        // queue grid config
+        const QUEUE_COLS = 2;
+        const CELL_X = 52;
+        const CELL_Y = 30;
+
+        const col = qi % QUEUE_COLS;
+        const row = Math.floor(qi / QUEUE_COLS);
+
+        const totalRows = Math.ceil(queued.length / QUEUE_COLS);
+        const rowOffset = (totalRows - 1) / 2;
+        const colOffset = (QUEUE_COLS - 1) / 2;
 
         return (
           <motion.div
             key={m.id}
             layout
             animate={{
-              x: m.state === "queued" ? X.queued : X.in_flight,
-              y: m.state === "queued" ? 210 + qi * spacing : 240 + (i % 6) * 14,
+              x:
+                m.state === "queued"
+                  ? queuePos.x + (col - colOffset) * CELL_X
+                  : consumerPos.x,
+              y:
+                m.state === "queued"
+                  ? queuePos.y + (row - rowOffset) * CELL_Y
+                  : consumerPos.y,
               scale: m.state === "in_flight" ? 1.35 : 1,
             }}
             transition={{ type: "spring", stiffness: 180, damping: 20 }}

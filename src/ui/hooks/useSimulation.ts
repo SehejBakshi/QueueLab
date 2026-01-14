@@ -8,7 +8,7 @@ export function useSimulation() {
         createInitialState()
     );
 
-    const [injectCount, setInjectCount] = useState(8);
+    const [injectCount, setInjectCount] = useState(3);
 
     const runningRef = useRef(true);
     const speedRef = useRef(400);
@@ -92,7 +92,7 @@ export function useSimulation() {
             next.ruleLog.push({
                 messageId: "system",
                 type: "CONFIG",
-                text: `[CONFIG] success rate set to ${rate}%`,
+                text: `[CONFIG] success rate set to ${rate*100}%`,
             });
             return next;
         });

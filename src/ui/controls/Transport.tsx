@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { useSimulation } from "../hooks/SimulationContext";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PauseIcon from "@mui/icons-material/Pause";
+import ReplayIcon from "@mui/icons-material/Replay";
 
 export function Transport() {
   const { enqueue, play, pause, setSpeed, injectCount, reset } = useSimulation();
-  const [running, setRunning] = useState(false);
 
-  function toggle() {
+  const [running, setRunning] = useState(false);
+  const [started, setStarted] = useState(false);
+
+  function toggleRun() {
     setRunning(r => {
       if (r) pause();
       else play();
@@ -13,12 +18,28 @@ export function Transport() {
     });
   }
 
+  function startRun() {
+    enqueue("burst", injectCount);
+    setStarted(true);
+    setRunning(true);
+    play();
+  }
+
+  function handleReset() {
+    reset();
+    pause();
+    setRunning(false);
+    setStarted(false);
+  }
+
   return (
     <div className="transport">
-      <button className="transport-btn" onClick={toggle}>
-        <span className="material-icons">
-          {running ? "pause" : "play_arrow"}
-        </span>
+      <button
+        className="transport-btn"
+        onClick={toggleRun}
+        disabled={!started}
+      >
+        {running ? <PauseIcon /> : <PlayArrowIcon />}
         <span className="transport-label">
           {running ? "PAUSE" : "RUN"}
         </span>
@@ -27,7 +48,7 @@ export function Transport() {
       <div className="speed">
         <span>SPEED</span>
         <input
-        type="range"
+          type="range"
           min={80}
           max={1200}
           step={40}
@@ -40,25 +61,21 @@ export function Transport() {
       </div>
 
       <button
-        className="inject-btn" 
-        onClick={() => {
-          enqueue("burst", injectCount);
-          if(!running)
-            toggle();
-        }}
+        className="inject-btn"
+        onClick={startRun}
+        disabled={started}
       >
         START RUN
       </button>
 
-      <button className="transport-btn" onClick={() => {
-        reset();
-        if(running)
-          toggle();
-      }}>
-        <span className="material-icons">replay</span>
+      <button
+        className="transport-btn"
+        onClick={handleReset}
+        disabled={!started}
+      >
+        <ReplayIcon />
         <span className="transport-label">RESET</span>
       </button>
-
     </div>
   );
 }
